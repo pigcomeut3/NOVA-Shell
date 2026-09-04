@@ -83,10 +83,17 @@ def enable_vt():
     if IS_WINDOWS:
         try:
             kernel32 = ctypes.windll.kernel32
-            handle = kernel32.GetStdHandle(-11)
-            mode = ctypes.c_ulong()
-            kernel32.GetConsoleMode(handle, ctypes.byref(mode))
-            kernel32.SetConsoleMode(handle, mode.value | 0x0004 | 0x0008)
+            out_handle = kernel32.GetStdHandle(-11)
+            omode = ctypes.c_ulong()
+            kernel32.GetConsoleMode(out_handle, ctypes.byref(omode))
+            kernel32.SetConsoleMode(out_handle, omode.value | 0x0004 | 0x0008)
+            in_handle = kernel32.GetStdHandle(-10)
+            imode = ctypes.c_ulong()
+            kernel32.GetConsoleMode(in_handle, ctypes.byref(imode))
+            in_val = imode.value
+            in_val = in_val & ~0x0040 & ~0x0010
+            in_val = in_val | 0x0080
+            kernel32.SetConsoleMode(in_handle, in_val)
         except Exception:
             pass
 
@@ -673,13 +680,14 @@ class LineEditor:
         self.hist_idx = -1
         self.buffer = []
         self.cursor = 0
-        self._last_rows = 0
+        self._last_cursor_row = 0
 
     def read(self, prompt_text):
         self.buffer = []
         self.cursor = 0
         self.hist_idx = -1
-        self._last_rows = 0
+        self._last_cursor_row = 0
+        put("\033[?25h")
         put(prompt_text)
         sys.stdout.flush()
         if IS_WINDOWS:
@@ -702,8 +710,9 @@ class LineEditor:
         prompt_plain = re.sub(r'\x1b\[[0-9;]*m', '', prompt_text)
         prompt_vis = vis_width(prompt_plain)
         suggestion = self._get_suggestion()
-        if self._last_rows > 0:
-            put(f"\033[{self._last_rows}A")
+        put("\033[?25l")
+        if self._last_cursor_row > 0:
+            put(f"\033[{self._last_cursor_row}A")
         put("\r\033[J")
         put(prompt_text)
         put(content)
@@ -721,7 +730,8 @@ class LineEditor:
         if row_diff > 0:
             put(f"\033[{row_diff}A")
         put(f"\033[{cursor_col + 1}G")
-        self._last_rows = total_rows
+        put("\033[?25h")
+        self._last_cursor_row = cursor_row
         sys.stdout.flush()
 
     def _read_windows(self, prompt_text):
