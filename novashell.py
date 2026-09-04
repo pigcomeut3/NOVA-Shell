@@ -1389,6 +1389,7 @@ class NOVAShell:
         self.editor = LineEditor(self)
         self.aliases = load_aliases()
         self.running = True
+        self._signout = False
         self.last_dir = self.real_cwd
         self.commands = self._build_commands()
 
@@ -1512,6 +1513,7 @@ class NOVAShell:
             "detach": (self.cmd_detach, "run a native command in background detached", "detach <command...>"),
             "signout": (self.cmd_signout, "log out and return to login screen", "signout"),
             "vanish": (self.cmd_vanish, "delete current user account and return to login", "vanish"),
+            "roster": (self.cmd_roster, "list all registered users (root only)", "roster"),
             "fortune": (self.cmd_fortune, "display a random quote or saying", "fortune"),
             "colors": (self.cmd_colors, "display terminal color palette test", "colors"),
             "calendar": (self.cmd_calendar, "show a calendar for current month", "calendar [month] [year]"),
@@ -4479,8 +4481,8 @@ class NOVAShell:
     def cmd_signout(self, args):
         info("signing out...")
         time.sleep(0.5)
+        self._signout = True
         self.running = False
-        main()
 
     def cmd_vanish(self, args):
         auth = load_auth()
@@ -4488,8 +4490,26 @@ class NOVAShell:
         save_auth(auth)
         warn(f"account '{self.username}' has been deleted")
         time.sleep(1)
+        self._signout = True
         self.running = False
-        main()
+
+    def cmd_roster(self, args):
+        if self.priv.current_level() != "root":
+            fail("permission denied: root privileges required")
+            return
+        auth = load_auth()
+        users = auth.get("users", [])
+        emit(f"  registered users ({len(users)}/{MAX_USERS})", Palette.BOLD + Palette.BRIGHT_YELLOW)
+        for u in users:
+            try:
+                created = datetime.datetime.fromtimestamp(u.get("created", 0)).strftime("%Y-%m-%d")
+            except Exception:
+                created = "unknown"
+            try:
+                last = datetime.datetime.fromtimestamp(u.get("last_login", 0)).strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                last = "never"
+            emit(f"    {u['username']:<18} created {created}   last login {last}", Palette.WHITE)
 
     def cmd_fortune(self, args):
         quotes = [
@@ -5346,6 +5366,26 @@ def find_system_python():
             continue
     return None
 
+def _wait_any_key():
+    try:
+        if IS_WINDOWS:
+            import msvcrt as _m
+            _m.getwch()
+        else:
+            import termios as _te, tty as _tt
+            _fd = sys.stdin.fileno()
+            _old = _te.tcgetattr(_fd)
+            try:
+                _tt.setraw(_fd)
+                sys.stdin.read(1)
+            finally:
+                _te.tcsetattr(_fd, _te.TCSADRAIN, _old)
+    except Exception:
+        try:
+            input()
+        except Exception:
+            pass
+
 def main():
     cleanup_temp_files()
     enable_vt()
@@ -5355,34 +5395,46 @@ def main():
     pkg_dir = os.path.join(CONFIG_DIR, "packages")
     if os.path.isdir(pkg_dir) and pkg_dir not in sys.path:
         sys.path.insert(0, pkg_dir)
-    sys.stdout.write("\033[?25h")
+    sys.stdout.write("\033[?25h\033[5 q")
     sys.stdout.flush()
     if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         sys.stdin.reconfigure(encoding="utf-8", errors="replace")
-    username = None
-    if HAS_TKINTER:
+    while True:
+        username = None
+        if HAS_TKINTER:
+            try:
+                username = tkinter_login()
+            except Exception:
+                username = None
+        if username is None:
+            try:
+                username = cli_login()
+            except Exception:
+                username = None
+        if username is None:
+            sys.stdout.write("\033[?25h\033[0 q")
+            sys.stdout.flush()
+            sys.exit(1)
+        init_animation()
+        shell = NOVAShell()
+        shell.username = username
         try:
-            username = tkinter_login()
-        except Exception:
-            username = None
-    if username is None:
-        try:
-            username = cli_login()
-        except Exception:
-            username = None
-    if username is None:
-        sys.stdout.write("\033[?25h")
+            shell.run()
+        finally:
+            sys.stdout.write("\033[?25h")
+            sys.stdout.flush()
+        if getattr(shell, "_signout", False):
+            line()
+            emit("  NOVA Shell terminal user session ended", Palette.BRIGHT_CYAN)
+            emit("  Press any key to exit", Palette.GRAY)
+            _wait_any_key()
+            sys.stdout.write("\033[H\033[2J\033[3J")
+            sys.stdout.flush()
+            continue
+        sys.stdout.write("\033[0 q")
         sys.stdout.flush()
-        sys.exit(1)
-    init_animation()
-    shell = NOVAShell()
-    shell.username = username
-    try:
-        shell.run()
-    finally:
-        sys.stdout.write("\033[?25h")
-        sys.stdout.flush()
+        break
 
 if __name__ == "__main__":
     main()
