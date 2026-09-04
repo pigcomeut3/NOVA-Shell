@@ -1,0 +1,9 @@
+﻿[Desktop Entry]
+Name=NOVA Shell
+Comment=Cross-platform terminal shell
+Exec=novashell
+Icon=nova-shell
+Terminal=true
+Type=Application
+Categories=System;TerminalEmulator;
+Keywords=shell;terminal;console;
