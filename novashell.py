@@ -1416,6 +1416,7 @@ class NOVAShell:
             "relocate": (self.cmd_relocate, "move a file or directory", "relocate <source> <destination>"),
             "rebrand": (self.cmd_rebrand, "rename a file or directory", "rebrand <old> <new>"),
             "read": (self.cmd_read, "display file contents", "read <file>"),
+            "readfile": (self.cmd_read, "display file contents", "readfile <file>"),
             "inscribe": (self.cmd_inscribe, "write text to a file (overwrites)", "inscribe <file> <text>"),
             "append": (self.cmd_append, "append text to a file", "append <file> <text>"),
             "inspect": (self.cmd_inspect, "show detailed file metadata", "inspect <path>"),
@@ -1688,7 +1689,7 @@ class NOVAShell:
         categories = {
             "Core": ["guide", "ver", "banner", "wipe", "depart", "say", "who", "when", "signout", "vanish", "config", "colors"],
             "Navigation": ["roam", "peek", "whereami", "goback", "gohome", "tree", "mark", "leap", "latest"],
-            "Files": ["forge", "mold", "erase", "clone", "relocate", "rebrand", "read", "inscribe", "append", "inspect", "measure", "edit", "preview", "touch", "truncate", "link", "lock", "unlock", "bigfind", "voidfind", "twinfind", "unique"],
+            "Files": ["forge", "mold", "erase", "clone", "relocate", "rebrand", "read", "readfile", "inscribe", "append", "inspect", "measure", "edit", "preview", "touch", "truncate", "link", "lock", "unlock", "bigfind", "voidfind", "twinfind", "unique"],
             "Text": ["filter", "count", "sort", "head", "tail", "reverse", "diff", "merge", "freq", "slug", "case", "morse", "roman", "reverse-text", "ascii"],
             "System": ["tasks", "terminate", "killtree", "top", "environ", "setenv", "unsetenv", "sysinfo", "uptime", "ports", "perm", "owner", "path", "address", "wireless", "power", "version", "detach", "mask", "manual", "locate", "hint", "exec", "pkg", "cpu", "memory", "disk", "lockscreen"],
             "Security": ["elevate", "droppriv", "privilege", "digest", "lock", "unlock"],
