@@ -1533,6 +1533,7 @@ class NOVAShell:
             "pkg": (self.cmd_pkg, "package manager - install/remove/list/search/update packages", "pkg <install|remove|list|search|update> [package]"),
             "update": (self.cmd_update, "install and manage Python extension libraries", "update <install|remove|list|upgrade|python> [package]"),
             "py": (self.cmd_py, "run Python code or scripts with the embedded interpreter", "py <code|file> [args...]"),
+            "nova": (self.cmd_nova, "NOVA scripting language - open/compile/create .nova scripts", "nova <file|compile|new> [path]"),
         }
 
     def prompt(self):
@@ -5149,6 +5150,140 @@ class NOVAShell:
             except Exception as e:
                 fail(str(e))
 
+    def _nova_namespace(self):
+        shell = self
+        ns = {
+            "__name__": "__nova__",
+            "shell": shell,
+            "emit": emit,
+            "info": info,
+            "warn": warn,
+            "fail": fail,
+            "line": line,
+            "Palette": Palette,
+            "VERSION": VERSION,
+            "os": os,
+            "sys": sys,
+            "time": time,
+        }
+        def run(cmd):
+            shell._execute(cmd)
+        ns["run"] = run
+        def nova_print(*a, **k):
+            emit("  " + " ".join(str(x) for x in a), Palette.WHITE)
+        ns["print"] = nova_print
+        return ns
+
+    def cmd_nova(self, args):
+        if not args:
+            info("NOVA scripting language - Python-compatible")
+            emit("  nova <file.nova>          open and run a .nova script", Palette.GRAY)
+            emit("  nova compile <file.nova>  compile to bytecode (.pyc)", Palette.GRAY)
+            emit("  nova new <file.nova>      create a template script", Palette.GRAY)
+            return
+        sub = args[0]
+        if sub == "compile":
+            if len(args) < 2:
+                fail("usage: nova compile <file.nova>")
+                return
+            self._nova_compile(args[1])
+            return
+        if sub == "new":
+            if len(args) < 2:
+                fail("usage: nova new <file.nova>")
+                return
+            self._nova_new(args[1])
+            return
+        self._nova_open(sub)
+
+    def _nova_open(self, path):
+        if not os.path.isfile(path):
+            fail(f"file not found: {path}")
+            return
+        ext = os.path.splitext(path)[1].lower()
+        if ext not in (".nova", ".pyc", ".py"):
+            fail(f"not a NOVA script: {path}")
+            return
+        with io.open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        line()
+        emit(f"  NOVA Script: {os.path.basename(path)}", Palette.BOLD + Palette.BRIGHT_CYAN)
+        emit(f"  Size: {len(content)} bytes, {content.count(chr(10))+1} lines", Palette.GRAY)
+        line()
+        for i, ln in enumerate(content.splitlines(), 1):
+            emit(f"  {i:>4} | {ln}", Palette.WHITE)
+        line()
+        emit("  Run this script? (y/n): ", Palette.BRIGHT_YELLOW, end="")
+        sys.stdout.flush()
+        try:
+            if IS_WINDOWS:
+                import msvcrt as _m
+                ans = _m.getwch().lower()
+            else:
+                import termios as _te, tty as _tt
+                _fd = sys.stdin.fileno()
+                _old = _te.tcgetattr(_fd)
+                try:
+                    _tt.setraw(_fd)
+                    ans = sys.stdin.read(1).lower()
+                finally:
+                    _te.tcsetattr(_fd, _te.TCSADRAIN, _old)
+        except Exception:
+            ans = "n"
+        emit(ans)
+        if ans != "y":
+            info("script cancelled")
+            return
+        line()
+        info(f"running {os.path.basename(path)}...")
+        ns = self._nova_namespace()
+        ns["__file__"] = os.path.abspath(path)
+        try:
+            if ext == ".pyc":
+                import marshal
+                with open(path, "rb") as f:
+                    f.read(16)
+                    code = marshal.load(f)
+                exec(code, ns)
+            else:
+                exec(compile(content, path, "exec"), ns)
+            info("script finished")
+        except SystemExit:
+            pass
+        except Exception as e:
+            fail(f"script error: {e}")
+
+    def _nova_compile(self, path):
+        if not os.path.isfile(path):
+            fail(f"file not found: {path}")
+            return
+        out = os.path.splitext(path)[0] + ".pyc"
+        try:
+            import py_compile
+            py_compile.compile(path, cfile=out, doraise=True)
+            info(f"compiled -> {out}")
+        except py_compile.PyCompileError as e:
+            fail(f"compile error: {e}")
+
+    def _nova_new(self, path):
+        if os.path.exists(path):
+            fail(f"file already exists: {path}")
+            return
+        template = (
+            '# NOVA Shell Script\n'
+            '# Python-compatible scripting language for NOVA Shell.\n'
+            '# Built-ins: emit(text, color), info(text), warn(text), fail(text)\n'
+            '#             run("command") to call NOVA Shell commands\n'
+            '#             shell.username, shell.real_cwd, Palette.*\n'
+            '\n'
+            'emit("Hello from NOVA Script!", Palette.BRIGHT_GREEN)\n'
+            'emit("User: " + shell.username, Palette.BRIGHT_CYAN)\n'
+            'info("Type guide in the shell to see all commands")\n'
+        )
+        with io.open(path, "w", encoding="utf-8", newline="") as f:
+            f.write(template)
+        info(f"created {path}")
+
 def tkinter_login():
     if not HAS_TKINTER:
         raise ImportError("tkinter not available")
@@ -5419,6 +5554,16 @@ def main():
         init_animation()
         shell = NOVAShell()
         shell.username = username
+        _nova_arg = None
+        for _a in sys.argv[1:]:
+            if _a.lower().endswith(".nova"):
+                _nova_arg = _a
+                break
+        if _nova_arg:
+            try:
+                shell._nova_open(_nova_arg)
+            except Exception as _e:
+                fail(f"script error: {_e}")
         try:
             shell.run()
         finally:

@@ -1,0 +1,14 @@
+# NOVA Shell Script - Demo
+# Python-compatible scripting language for NOVA Shell.
+# Built-ins: emit(text, color), info(text), warn(text), fail(text)
+#             run("command") to call NOVA Shell commands
+#             shell.username, shell.real_cwd, Palette.*
+
+emit("Hello from NOVA Script!", Palette.BRIGHT_GREEN)
+emit("User: " + shell.username, Palette.BRIGHT_CYAN)
+emit("Shell version: " + VERSION, Palette.GRAY)
+line()
+info("This script runs inside NOVA Shell with full Python power.")
+warn("You can call shell commands via run('who')")
+run("who")
+emit("Done!", Palette.BRIGHT_GREEN)

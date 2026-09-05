@@ -276,3 +276,49 @@ edit 是一个像Markdown一样的全屏终端编辑器。
         祝你使用愉快！
         NOVA Shell团队
 ========================================
+
+
+========================================
+  NOVA 脚本语言 (.nova)
+========================================
+
+NOVA Shell 内置了一套与 Python 兼容的脚本语言，文件后缀为 .nova。
+
+【打开脚本】
+  nova <文件名.nova>
+  功能：显示脚本全部内容（带行号），然后英文提示 "Run this script? (y/n):"
+  按 y 立即执行，按其他键取消。
+
+  也可以直接把 .nova 文件拖到 NOVA Shell.exe 上打开，
+  或在系统中设置 .nova 后缀默认用 NOVA Shell 打开，
+  双击后登录完成会自动显示脚本内容并询问是否运行。
+
+【编译脚本】
+  nova compile <文件名.nova>
+  功能：将 .nova 脚本编译为字节码 (.pyc)，编译后可直接用 nova 命令运行 .pyc。
+
+【新建脚本模板】
+  nova new <文件名.nova>
+  功能：自动生成一个带注释的 .nova 模板文件。
+
+【脚本可用内置对象】
+  emit(文本, 颜色)    彩色输出
+  info(文本)          提示信息
+  warn(文本)          警告信息
+  fail(文本)          错误信息
+  line()              空行
+  run("命令")         在脚本中调用 NOVA Shell 任意命令
+  shell.username      当前登录用户名
+  shell.real_cwd      当前真实目录
+  Palette.*           颜色常量（BRIGHT_GREEN、BRIGHT_CYAN 等）
+  VERSION             NOVA Shell 版本号
+  os / sys / time     标准 Python 模块
+
+【示例】
+  emit("Hello!", Palette.BRIGHT_GREEN)
+  emit("User: " + shell.username, Palette.BRIGHT_CYAN)
+  run("who")
+  info("脚本执行完毕")
+
+【附带示例】
+  同目录下的 demo.nova 是一个完整示例，输入 nova demo.nova 即可体验。
