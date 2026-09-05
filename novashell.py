@@ -2395,50 +2395,85 @@ class NOVAShell:
         info(f"downloading: {url}")
         info(f"saving to:   {output}")
         try:
-            request = urllib.request.Request(url, headers={"User-Agent": "NOVA-Shell/2.0"})
-            with urllib.request.urlopen(request, timeout=60) as response:
+            import gzip as _gzip
+            request = urllib.request.Request(url, headers={
+                "User-Agent": "NOVA-Shell/2.0",
+                "Accept-Encoding": "gzip, deflate",
+                "Connection": "keep-alive",
+            })
+            with urllib.request.urlopen(request, timeout=120) as response:
                 total = int(response.headers.get("Content-Length", 0))
+                enc = response.headers.get("Content-Encoding", "").lower()
                 downloaded = 0
-                block_size = 8192
-                data = b""
+                block_size = 262144
                 start_time = time.time()
-                while True:
-                    chunk = response.read(block_size)
-                    if not chunk:
-                        break
-                    data += chunk
-                    downloaded += len(chunk)
-                    elapsed = time.time() - start_time
-                    speed = downloaded / elapsed if elapsed > 0 else 0
-                    if total > 0:
-                        pct = downloaded / total * 100
-                        bar_len = 30
-                        filled = int(bar_len * downloaded / total)
-                        bar = "=" * filled + ">" + "." * (bar_len - filled - 1)
-                        put(f"\r  [{Palette.BRIGHT_GREEN}{bar}{Palette.RESET}] ")
-                        put(f"{Palette.BRIGHT_CYAN}{pct:5.1f}%{Palette.RESET}  ")
-                        put(f"{Palette.BRIGHT_YELLOW}{self._human_size(downloaded)}/{self._human_size(total)}{Palette.RESET}  ")
-                        put(f"{Palette.BRIGHT_MAGENTA}{self._human_size(speed)}/s{Palette.RESET}   ")
-                    else:
-                        put(f"\r  {Palette.BRIGHT_CYAN}{self._human_size(downloaded)}{Palette.RESET} downloaded  ")
-                        put(f"{Palette.BRIGHT_MAGENTA}{self._human_size(speed)}/s{Palette.RESET}   ")
-                    sys.stdout.flush()
-                line()
+                last_draw = 0.0
                 if self.mode == "virtual":
+                    chunks = []
+                    while True:
+                        chunk = response.read(block_size)
+                        if not chunk:
+                            break
+                        chunks.append(chunk)
+                        downloaded += len(chunk)
+                        now = time.time()
+                        if now - last_draw >= 0.1:
+                            last_draw = now
+                            self._draw_progress(downloaded, total, start_time)
+                    data = b"".join(chunks)
+                    if "gzip" in enc:
+                        try: data = _gzip.decompress(data)
+                        except Exception: pass
+                    line()
                     text_content = data.decode("utf-8", errors="replace")
                     ok, err = self.vfs.write_file(output, text_content)
                     if not ok:
                         fail(err)
                         return
+                    final_size = len(text_content)
                 else:
-                    with open(output_path, "wb") as f:
-                        f.write(data)
+                    raw = open(output_path, "wb")
+                    decomp = None
+                    if "gzip" in enc:
+                        decomp = _gzip.GzipFile(fileobj=response)
+                    while True:
+                        chunk = (decomp or response).read(block_size)
+                        if not chunk:
+                            break
+                        raw.write(chunk)
+                        downloaded += len(chunk)
+                        now = time.time()
+                        if now - last_draw >= 0.1:
+                            last_draw = now
+                            self._draw_progress(downloaded, total, start_time)
+                    raw.close()
+                    if decomp: decomp.close()
+                    line()
+                    final_size = os.path.getsize(output_path)
                 elapsed = time.time() - start_time
-                done(f"download complete: {output} ({self._human_size(downloaded)} in {elapsed:.1f}s)")
+                done(f"download complete: {output} ({self._human_size(final_size)} in {elapsed:.1f}s)")
         except urllib.error.URLError as e:
             fail(f"download failed: {e.reason}")
         except Exception as e:
             fail(f"download failed: {e}")
+
+    def _draw_progress(self, downloaded, total, start_time):
+        elapsed = time.time() - start_time
+        speed = downloaded / elapsed if elapsed > 0 else 0
+        if total > 0:
+            pct = downloaded / total * 100
+            bar_len = 30
+            filled = int(bar_len * downloaded / total)
+            if filled > bar_len: filled = bar_len
+            bar = "=" * filled + ">" + "." * (bar_len - filled - 1)
+            put(f"\r  [{Palette.BRIGHT_GREEN}{bar}{Palette.RESET}] ")
+            put(f"{Palette.BRIGHT_CYAN}{pct:5.1f}%{Palette.RESET}  ")
+            put(f"{Palette.BRIGHT_YELLOW}{self._human_size(downloaded)}/{self._human_size(total)}{Palette.RESET}  ")
+            put(f"{Palette.BRIGHT_MAGENTA}{self._human_size(speed)}/s{Palette.RESET}   ")
+        else:
+            put(f"\r  {Palette.BRIGHT_CYAN}{self._human_size(downloaded)}{Palette.RESET} downloaded  ")
+            put(f"{Palette.BRIGHT_MAGENTA}{self._human_size(speed)}/s{Palette.RESET}   ")
+        sys.stdout.flush()
 
     def cmd_resolve(self, args):
         if not args:
