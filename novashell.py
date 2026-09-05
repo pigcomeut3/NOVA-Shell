@@ -5174,6 +5174,26 @@ class NOVAShell:
         def nova_print(*a, **k):
             emit("  " + " ".join(str(x) for x in a), Palette.WHITE)
         ns["print"] = nova_print
+        def readfile(path):
+            if shell.mode == "virtual":
+                content, err = shell.vfs.read_file(path)
+                if content is None:
+                    raise FileNotFoundError(err)
+                return content
+            rp = shell._resolve_path(path)
+            if not os.path.isfile(rp):
+                raise FileNotFoundError("no such file: " + path)
+            with io.open(rp, "r", encoding="utf-8", errors="replace") as f:
+                return f.read()
+        ns["readfile"] = readfile
+        def writefile(path, content):
+            if shell.mode == "virtual":
+                shell.vfs.write_file(path, content)
+                return
+            rp = shell._resolve_path(path)
+            with io.open(rp, "w", encoding="utf-8", newline="") as f:
+                f.write(content)
+        ns["writefile"] = writefile
         return ns
 
     def cmd_nova(self, args):
