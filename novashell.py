@@ -682,12 +682,14 @@ class LineEditor:
         self.buffer = []
         self.cursor = 0
         self._last_cursor_row = 0
+        self._last_cols = 0
 
     def read(self, prompt_text):
         self.buffer = []
         self.cursor = 0
         self.hist_idx = -1
         self._last_cursor_row = 0
+        self._last_cols = 0
         put("\033[?25h")
         put(prompt_text)
         sys.stdout.flush()
@@ -708,6 +710,10 @@ class LineEditor:
     def _refresh(self, prompt_text):
         content = "".join(self.buffer)
         cols = term_width()
+        if self._last_cols and cols != self._last_cols:
+            put("\033[?25l\033[H\033[2J\033[3J")
+            self._last_cursor_row = 0
+        self._last_cols = cols
         prompt_plain = re.sub(r'\x1b\[[0-9;]*m', '', prompt_text)
         prompt_vis = vis_width(prompt_plain)
         suggestion = self._get_suggestion()
